@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Define variables
+IMAGE_NAME="bambu-container"
+CONTAINER_NAME="bambu-container-instance"
+DOCKERFILE="Dockerfile"
+WORKDIR="/workspace"
+
+# Check the current architecture
+ARCH=$(uname -m)
+
+if [[ "$ARCH" == "arm"* || "$ARCH" == "aarch64" ]]; then
+  echo "Error: This script does not support ARM architecture ($ARCH)."
+  exit 1
+fi
+
+# Check if the image exists
+if ! podman image exists $IMAGE_NAME; then
+  echo "Image $IMAGE_NAME not found. Building the image..."
+  podman build -t $IMAGE_NAME -f $DOCKERFILE .
+  if [ $? -ne 0 ]; then
+    echo "Failed to build the image. Exiting."
+    exit 1
+  fi
+fi
+
+# Check if the container is already running
+if podman ps --filter "name=$CONTAINER_NAME" --format "{{.Names}}" | grep -q "^$CONTAINER_NAME$"; then
+  echo "Container $CONTAINER_NAME is already running. Attaching to it..."
+  podman exec -it $CONTAINER_NAME bash
+  exit 0
+fi
+
+# Run the container, sharing the current directory
+echo "Starting the container..."
+podman run -it --rm \
+  --name $CONTAINER_NAME \
+  -v "$(pwd):$WORKDIR:Z" \
+  $IMAGE_NAME
+
